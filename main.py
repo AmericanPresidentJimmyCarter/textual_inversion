@@ -21,7 +21,9 @@ from pytorch_lightning.utilities import rank_zero_info
 from ldm.data.base import Txt2ImgIterableBaseDataset
 from ldm.util import instantiate_from_config
 
+'''
 def load_model_from_config(config, ckpt, verbose=False):
+    print('LOADING MODELL!!!!!')
     print(f"Loading model from {ckpt}")
     pl_sd = torch.load(ckpt, map_location="gpu")
     sd = pl_sd["state_dict"]
@@ -36,6 +38,25 @@ def load_model_from_config(config, ckpt, verbose=False):
         print(u)
 
     model.cuda()
+    return model
+'''
+def load_model_from_config(config, ckpt, verbose=False):
+    print(f"Loading model from {ckpt}")
+    pl_sd = torch.load(ckpt, map_location="cpu")
+    if "global_step" in pl_sd:
+        print(f"Global Step: {pl_sd['global_step']}")
+    sd = pl_sd["state_dict"]
+    model = instantiate_from_config(config.model)
+    m, u = model.load_state_dict(sd, strict=False)
+    if len(m) > 0 and verbose:
+        print("missing keys:")
+        print(m)
+    if len(u) > 0 and verbose:
+        print("unexpected keys:")
+        print(u)
+
+    model.cuda()
+    model.eval()
     return model
 
 def get_parser(**parser_kwargs):
@@ -580,10 +601,12 @@ if __name__ == "__main__":
         if opt.init_word:
             config.model.params.personalization_config.params.initializer_words[0] = opt.init_word
 
-        if opt.actual_resume:
-            model = load_model_from_config(config, opt.actual_resume)
-        else:
-            model = instantiate_from_config(config.model)
+        # if opt.actual_resume:
+        print(os.path.dirname(os.path.realpath(__file__)))
+        print(os.path.exists('models/ldm/stable-diffusion-v1/model.ckpt'))
+        model = load_model_from_config(config, 'models/ldm/stable-diffusion-v1/model.ckpt')# opt.actual_resume)
+        # else:
+        #     model = instantiate_from_config(config.model)
 
         # trainer and callbacks
         trainer_kwargs = dict()
