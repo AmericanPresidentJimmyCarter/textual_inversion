@@ -8,6 +8,10 @@ from torchvision import transforms
 import random
 
 imagenet_templates_small = [
+    'a still from the animation featuring the character {}',
+    'a picture of the cartoon character {}',
+    'a photo of the cartoon character {}',
+    'a picture depicting {}',
     'a painting in the style of {}',
     'a rendering in the style of {}',
     'a cropped painting in the style of {}',
@@ -30,6 +34,10 @@ imagenet_templates_small = [
 ]
 
 imagenet_dual_templates_small = [
+    'a still from the animation in the style of {} featuring the character {}',
+    'a picture in the style of {} of the cartoon character {}',
+    'a photo in the style of {} of the cartoon character {}',
+    'a picture in the style of {} depicting {}',
     'a painting in the style of {} with {}',
     'a rendering in the style of {} with {}',
     'a cropped painting in the style of {} with {}',
@@ -103,6 +111,8 @@ class PersonalizedBase(Dataset):
         if not image.mode == "RGB":
             image = image.convert("RGB")
 
+        # import pprint
+        # pprint.pprint(self.placeholder_token)
         if self.per_image_tokens and np.random.uniform() < 0.25:
             text = random.choice(imagenet_dual_templates_small).format(self.placeholder_token, per_img_token_list[i % self.num_images])
         else:

@@ -17,6 +17,7 @@ from einops import rearrange, repeat
 from contextlib import contextmanager
 from functools import partial
 from tqdm import tqdm
+from torch.autograd import Variable
 from torchvision.utils import make_grid
 from pytorch_lightning.utilities.distributed import rank_zero_only
 
@@ -113,9 +114,9 @@ class DDPM(pl.LightningModule):
         self.loss_type = loss_type
 
         self.learn_logvar = learn_logvar
-        self.logvar = torch.full(fill_value=logvar_init, size=(self.num_timesteps,))
+        self.logvar = torch.full(fill_value=logvar_init, size=(self.num_timesteps,)).cuda()
         if self.learn_logvar:
-            self.logvar = nn.Parameter(self.logvar, requires_grad=True)
+            self.logvar = nn.Parameter(self.logvar, requires_grad=True).cuda()
 
 
     def register_schedule(self, given_betas=None, beta_schedule="linear", timesteps=1000,
@@ -188,7 +189,7 @@ class DDPM(pl.LightningModule):
                     print(f"{context}: Restored training weights")
 
     def init_from_ckpt(self, path, ignore_keys=list(), only_model=False):
-        sd = torch.load(path, map_location="cpu")
+        sd = torch.load(path, map_location="cuda")
         if "state_dict" in list(sd.keys()):
             sd = sd["state_dict"]
         keys = list(sd.keys())
@@ -331,6 +332,8 @@ class DDPM(pl.LightningModule):
         return self.p_losses(x, t, *args, **kwargs)
 
     def get_input(self, batch, k):
+        #import pprint
+        #pprint.pprint(batch)
         x = batch[k]
         if len(x.shape) == 3:
             x = x[..., None]
@@ -1064,8 +1067,10 @@ class LatentDiffusion(DDPM):
         loss_simple = self.get_loss(model_output, target, mean=False).mean([1, 2, 3])
         loss_dict.update({f'{prefix}/loss_simple': loss_simple.mean()})
 
+        # import pprint
+        # pprint.pprint(self.logvar, self.logvar[t], self.device)
         logvar_t = self.logvar[t].to(self.device)
-        loss = loss_simple / torch.exp(logvar_t) + logvar_t
+        loss = Variable(loss_simple / torch.exp(logvar_t) + logvar_t, requires_grad=True)
         # loss = loss_simple / torch.exp(self.logvar) + self.logvar
         if self.learn_logvar:
             loss_dict.update({f'{prefix}/loss_gamma': loss.mean()})
@@ -1508,7 +1513,7 @@ class Layout2ImgDiffusion(LatentDiffusion):
         bbox_imgs = []
         map_fn = lambda catno: dset.get_textual_label(dset.get_category_id(catno))
         for tknzd_bbox in batch[self.cond_stage_key][:N]:
-            bboximg = mapper.plot(tknzd_bbox.detach().cpu(), map_fn, (256, 256))
+            bboximg = mapper.plot(tknzd_bbox.detach().cuda(), map_fn, (256, 256))
             bbox_imgs.append(bboximg)
 
         cond_img = torch.stack(bbox_imgs, dim=0)

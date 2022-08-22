@@ -23,7 +23,7 @@ from ldm.util import instantiate_from_config
 
 def load_model_from_config(config, ckpt, verbose=False):
     print(f"Loading model from {ckpt}")
-    pl_sd = torch.load(ckpt, map_location="cpu")
+    pl_sd = torch.load(ckpt, map_location="gpu")
     sd = pl_sd["state_dict"]
     config.model.params.ckpt_path = ckpt
     model = instantiate_from_config(config.model)
@@ -362,7 +362,7 @@ class ImageLogger(Callback):
             grid = grid.transpose(0, 1).transpose(1, 2).squeeze(-1)
             grid = grid.numpy()
             grid = (grid * 255).astype(np.uint8)
-            filename = "{}_gs-{:06}_e-{:06}_b-{:06}.jpg".format(
+            filename = "{}_gs-{:06}_e-{:06}_b-{:06}.png".format(
                 k,
                 global_step,
                 current_epoch,
@@ -574,6 +574,8 @@ if __name__ == "__main__":
         # config.model.params.personalization_config.params.init_word = opt.init_word
         config.model.params.personalization_config.params.embedding_manager_ckpt = opt.embedding_manager_ckpt
         config.model.params.personalization_config.params.placeholder_tokens = opt.placeholder_tokens
+        import pprint
+        pprint.pprint(trainer_opt)
 
         if opt.init_word:
             config.model.params.personalization_config.params.initializer_words[0] = opt.init_word
@@ -706,7 +708,8 @@ if __name__ == "__main__":
         trainer_kwargs["callbacks"] = [instantiate_from_config(callbacks_cfg[k]) for k in callbacks_cfg]
         trainer_kwargs["max_steps"] = opt.max_steps
 
-        trainer = Trainer.from_argparse_args(trainer_opt, **trainer_kwargs)
+        # trainer = Trainer.from_argparse_args(trainer_opt, **trainer_kwargs)
+        trainer = Trainer(accelerator='gpu', devices=1)
         trainer.logdir = logdir  ###
 
         # data
@@ -726,10 +729,10 @@ if __name__ == "__main__":
 
         # configure learning rate
         bs, base_lr = config.data.params.batch_size, config.model.base_learning_rate
-        if not cpu:
-            ngpu = len(lightning_config.trainer.gpus.strip(",").split(','))
-        else:
-            ngpu = 1
+        # if not cpu:
+        #     ngpu = len(lightning_config.trainer.gpus.strip(",").split(','))
+        # else:
+        ngpu = 1
         if 'accumulate_grad_batches' in lightning_config.trainer:
             accumulate_grad_batches = lightning_config.trainer.accumulate_grad_batches
         else:
@@ -777,6 +780,8 @@ if __name__ == "__main__":
         if not opt.no_test and not trainer.interrupted:
             trainer.test(model, data)
     except Exception:
+        import traceback
+        traceback.print_exc()
         if opt.debug and trainer.global_rank == 0:
             try:
                 import pudb as debugger
